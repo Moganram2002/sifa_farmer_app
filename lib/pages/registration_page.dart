@@ -1,9 +1,7 @@
-// lib/pages/registration_page.dart
-
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../libraries/copyright_footer.dart';
-import '../libraries/registration_form_widget.dart'; // Import your new library
+import '../libraries/registration_form_widget.dart';
 
 class RegistrationPage extends StatefulWidget {
   @override
@@ -11,10 +9,8 @@ class RegistrationPage extends StatefulWidget {
 }
 
 class _RegistrationPageState extends State<RegistrationPage> {
-  // The ApiService can be initialized here or passed via a dependency injector
   final _apiService = ApiService();
 
-  // This is the logic that will run when the form is successfully submitted.
   Future<void> _registerUser(RegistrationPayload payload) async {
     try {
       final response = await _apiService.register(
@@ -55,34 +51,32 @@ class _RegistrationPageState extends State<RegistrationPage> {
           icon: Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        // You can keep the language switcher here if you want it in the AppBar
       ),
       body: Column(
         children: [
           Expanded(
             child: Center(
               child: SingleChildScrollView(
-                padding: EdgeInsets.symmetric(vertical: 20.0),
+                padding: const EdgeInsets.symmetric(vertical: 20.0),
                 child: Container(
                   width: MediaQuery.of(context).size.width > 800 ? 700 : MediaQuery.of(context).size.width * 0.9,
-                  padding: EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.green.shade50,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [BoxShadow(color: Colors.grey.shade400, blurRadius: 12, spreadRadius: 1, offset: Offset(0, 0))],
                   ),
-                  // Using the library widget
                   child: RegistrationForm(
                     apiService: _apiService,
                     onFormSubmit: _registerUser,
                     submitButtonText: 'Register Now',
-                    isOtpFieldVisible: true, // Show OTP for public registration
+                    isOtpFieldVisible: true,
                   ),
                 ),
               ),
             ),
           ),
-          CopyrightFooter(),
+          const CopyrightFooter(),
         ],
       ),
     );

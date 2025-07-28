@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
 import 'registration_page.dart';
-import '../dashboards.dart'; // UPDATED: Import the single dashboard.dart file
+import '../dashboards.dart';
 import '../models/user_data.dart';
 import '../services/api_service.dart';
 import '../utils/auth_storage.dart';
@@ -16,7 +16,6 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  // All your existing state variables
   final _apiService = ApiService();
   final mobileController = TextEditingController();
   final otpController = TextEditingController();
@@ -30,26 +29,67 @@ class _LoginPageState extends State<LoginPage> {
   String? selectedAadhar;
   String message = '';
   Timer? _timer;
-  int _secondsRemaining = 0;
   UserData? _loggedInUser;
+
+  bool? _isMobileValid;
+  bool? _isOtpValid;
+
+  final ValueNotifier<int> _secondsRemaining = ValueNotifier<int>(0);
 
   @override
   void initState() {
     super.initState();
     mobileFocusNode = FocusNode();
     otpFocusNode = FocusNode();
-    mobileFocusNode.addListener(() => setState(() {}));
-    otpFocusNode.addListener(() => setState(() {}));
+    mobileFocusNode.addListener(_validateMobileOnFocus);
+    otpFocusNode.addListener(_validateOtpOnFocus);
   }
 
   @override
   void dispose() {
+    mobileFocusNode.removeListener(_validateMobileOnFocus);
+    otpFocusNode.removeListener(_validateOtpOnFocus);
     mobileFocusNode.dispose();
     otpFocusNode.dispose();
     _timer?.cancel();
     mobileController.dispose();
     otpController.dispose();
+    _secondsRemaining.dispose();
     super.dispose();
+  }
+  
+  void _validateMobileOnFocus() {
+    if (!mobileFocusNode.hasFocus) {
+      setState(() {
+        if (mobileController.text.isNotEmpty) {
+          _isMobileValid = mobileController.text.length == 10;
+        } else {
+          _isMobileValid = null;
+        }
+      });
+    }
+  }
+
+  void _validateOtpOnFocus() {
+    if (!otpFocusNode.hasFocus) {
+      setState(() {
+        if (otpController.text.isNotEmpty) {
+          _isOtpValid = otpController.text.length == 6;
+        } else {
+          _isOtpValid = null;
+        }
+      });
+    }
+  }
+
+  Color _getBorderColor(bool? isValid) {
+    if (isValid == null) {
+      return Colors.grey.shade300; 
+    } else if (isValid) {
+      return Colors.green; 
+    } else {
+      return Colors.grey.shade600; 
+    }
   }
 
   void _showMessage(String text, {bool isError = false}) {
@@ -61,12 +101,13 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> sendOtp() async {
-    // This function's logic remains the same
     FocusScope.of(context).unfocus();
-    if (mobileController.text.length != 10) {
+    setState(() => _isMobileValid = mobileController.text.length == 10);
+    if (_isMobileValid != true) {
       _showMessage('Please enter a valid 10-digit mobile number.', isError: true);
       return;
     }
+    
     setState(() => _isLoading = true);
     try {
       final response = await _apiService.sendOtp(mobileController.text);
@@ -75,7 +116,6 @@ class _LoginPageState extends State<LoginPage> {
       } else {
         setState(() {
           otpSent = true;
-          _secondsRemaining = 60;
         });
         _startTimer();
         _showMessage('OTP sent successfully');
@@ -88,29 +128,32 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> verifyOtp() async {
-    // This function's logic remains the same
     FocusScope.of(context).unfocus();
-    if (otpController.text.length < 6) {
+    setState(() => _isOtpValid = otpController.text.length == 6);
+    if (_isOtpValid != true) {
       _showMessage('Please enter the 6-digit OTP.', isError: true);
       return;
     }
+    
     setState(() => _isLoading = true);
     try {
       final response = await _apiService.login(mobileController.text, otpController.text);
 
       if (response.containsKey('token')) {
-        await AuthStorage.saveToken(response['token']);
-        await AuthStorage.saveUser(response['user']);
+        await Future.wait([
+          AuthStorage.saveToken(response['token']),
+          AuthStorage.saveUser(response['user'])
+        ]);
 
         _loggedInUser = UserData.fromJson(response['user']);
 
         _timer?.cancel();
-        setState(() => otpVerified = true);
         _showMessage('OTP Verified.');
 
-        if (_loggedInUser!.roleId == 0) { // User role
-          _fetchAadharForUser();
-        } else { // Admin or Super Admin role
+        if (_loggedInUser!.roleId == 0) {
+          await _fetchAadharForUser();
+        } else {
+          setState(() => otpVerified = true);
           _showAdminDetailsPopup(_loggedInUser!);
         }
       } else {
@@ -124,47 +167,113 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _fetchAadharForUser() async {
-    // This function's logic remains the same
-    setState(() { aadharList = []; });
     try {
       final numbers = await _apiService.getAadharNumbers(mobileController.text);
       if (!mounted) return;
-      setState(() => aadharList = numbers);
+
+      if (numbers != null && numbers.length == 1) {
+        setState(() {
+          selectedAadhar = numbers.first;
+        });
+        submitAndNavigate();
+      } else {
+        setState(() {
+          aadharList = numbers ?? [];
+          otpVerified = true; 
+        });
+      }
     } catch (e) {
       _showMessage(e.toString().replaceFirst('Exception: ', ''), isError: true);
+      setState(() {
+        aadharList = [];
+        otpVerified = true; 
+      });
     }
   }
 
+  
   void _showAdminDetailsPopup(UserData admin) {
-    // This function's logic remains the same
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('Confirm Your Identity'),
-        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Name: ${admin.name}'),
-          Text('Role: ${admin.roleId == 1 ? "Admin" : "Super Admin"}'),
-        ]),
+        backgroundColor: Colors.green.shade50,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(15.0),
+          side: BorderSide(color: Colors.green.shade300, width: 2),
+        ),
+        contentPadding: const EdgeInsets.fromLTRB(24.0, 20.0, 24.0, 24.0),
+        title: Row(
+          children: [
+            Icon(Icons.shield_outlined, color: Colors.green.shade800),
+            const SizedBox(width: 10),
+            Text(
+              'Admin Confirmation',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green.shade800),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 350,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text.rich(
+                TextSpan(
+                  text: 'Name: ',
+                  style: const TextStyle(fontSize: 16, color: Colors.black54),
+                  children: [
+                    TextSpan(
+                      text: admin.name,
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey.shade700),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text.rich(
+                TextSpan(
+                  text: 'Role: ',
+                  style: const TextStyle(fontSize: 16, color: Colors.black54),
+                  children: [
+                    TextSpan(
+                      text: admin.roleId == 1 ? "Admin" : "Super Admin",
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey.shade700),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
         actions: [
-          TextButton(onPressed: () { Navigator.pop(context); _resetToStartState(); }, child: const Text('Cancel')),
-          ElevatedButton(onPressed: () {
-            setState(() => adminDetailsConfirmed = true);
-            Navigator.pop(context);
-            submitAndNavigate(); // Navigate immediately on confirm
-          }, child: const Text('Confirm and Continue')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _resetToStartState();
+            },
+            child: Text('Cancel', style: TextStyle(color: Colors.grey.shade700)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green.shade600,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              setState(() => adminDetailsConfirmed = true);
+              Navigator.pop(context);
+              submitAndNavigate();
+            },
+            child: const Text('Confirm & Continue'),
+          ),
         ],
       ),
     );
   }
 
-  // ### THIS IS THE KEY CHANGE ###
-  // This function is now simplified to use the DashboardPage router.
   void submitAndNavigate() {
     if (_loggedInUser == null) return;
-    
-    // The switch statement is no longer needed here.
-    // We navigate to the single DashboardPage and it handles showing the correct view.
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (context) => DashboardPage(currentUser: _loggedInUser!)),
@@ -173,33 +282,30 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _startTimer() {
-    // This function's logic remains the same
     _timer?.cancel();
+    _secondsRemaining.value = 60;
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_secondsRemaining <= 0) {
+      if (_secondsRemaining.value <= 0) {
         timer.cancel();
-        if (mounted) setState(() {});
-      } else if (mounted) {
-        setState(() => _secondsRemaining--);
       } else {
-        timer.cancel();
+        _secondsRemaining.value--;
       }
     });
   }
 
   void _resetToStartState() {
-    // This function's logic remains the same
     setState(() {
       _isLoading = false; otpSent = false; otpVerified = false; adminDetailsConfirmed = false;
       aadharList.clear(); selectedAadhar = null; mobileController.clear();
-      otpController.clear(); message = ''; _timer?.cancel(); _secondsRemaining = 0;
+      otpController.clear(); message = ''; _timer?.cancel(); _secondsRemaining.value = 0;
       _loggedInUser = null;
+      _isMobileValid = null;
+      _isOtpValid = null;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // Your build method remains the same as it correctly calls _buildLoginStage()
     return Scaffold(
       backgroundColor: const Color(0xFFE8F5E9),
       appBar: AppBar(
@@ -235,7 +341,13 @@ class _LoginPageState extends State<LoginPage> {
                             _buildLoginStage(),
                             if (message.isNotEmpty) ...[
                               const SizedBox(height: 16),
-                              Text(message, textAlign: TextAlign.center, style: TextStyle(color: message.contains('successfully') || message.contains('Verified') ? Colors.green.shade700 : Colors.red, fontWeight: FontWeight.bold)),
+                              Text(message,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                      color: message.contains('successfully') || message.contains('Verified')
+                                          ? Colors.green.shade700
+                                          : Colors.grey.shade800,
+                                      fontWeight: FontWeight.bold)),
                             ],
                           ],
                         ),
@@ -255,14 +367,13 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
           ),
-          CopyrightFooter(color: Colors.grey.shade700),
+          const CopyrightFooter(),
         ],
       ),
     );
   }
 
   Widget _buildLoginStage() {
-    // This function's logic remains the same
     if (otpVerified && _loggedInUser != null) {
       final bool isUserRole = _loggedInUser!.roleId == 0;
       final bool isSubmitEnabled = (isUserRole && selectedAadhar != null) || (!isUserRole && adminDetailsConfirmed);
@@ -301,7 +412,11 @@ class _LoginPageState extends State<LoginPage> {
     return Column(
       children: [
         Container(
-          decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+            color: Colors.green.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _getBorderColor(_isMobileValid), width: 1.5),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: TextField(
             controller: mobileController,
@@ -315,7 +430,11 @@ class _LoginPageState extends State<LoginPage> {
         const SizedBox(height: 16),
         if (otpSent) ...[
           Container(
-            decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+              color: Colors.green.shade50, 
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _getBorderColor(_isOtpValid), width: 1.5),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: TextField(
               controller: otpController,
@@ -334,9 +453,14 @@ class _LoginPageState extends State<LoginPage> {
                   child: const Text("Verify OTP"),
                 ),
           const SizedBox(height: 16),
-          _secondsRemaining > 0
-              ? Text('Resend OTP in $_secondsRemaining seconds', style: const TextStyle(color: Colors.grey))
-              : TextButton(onPressed: _isLoading ? null : sendOtp, child: const Text("Resend OTP")),
+          ValueListenableBuilder<int>(
+            valueListenable: _secondsRemaining,
+            builder: (context, seconds, child) {
+              return seconds > 0
+                  ? Text('Resend OTP in $seconds seconds', style: const TextStyle(color: Colors.grey))
+                  : TextButton(onPressed: _isLoading ? null : sendOtp, child: const Text("Resend OTP"));
+            },
+          ),
         ] else ...[
           _isLoading
               ? const SizedBox(height: 50, child: Center(child: CircularProgressIndicator()))
@@ -351,7 +475,6 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Widget _buildAadhaarSelection() {
-    // This function's logic remains the same
     return Column(
       children: [
         const Text("Select Your Aadhaar Number", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),

@@ -1,5 +1,3 @@
-// lib/widgets/registration_form_library.dart
-
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
@@ -8,10 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:translator/translator.dart';
-import '../services/api_service.dart'; // Ensure this path is correct
-import '../profile_picture_picker.dart'; // Ensure this path is correct
+import 'package:http/http.dart' as http;
+import '../services/api_service.dart';
+import '../profile_picture_picker.dart';
 
-// A helper class to pass all form data back to the parent page
 class RegistrationPayload {
   final Map<String, String?> userData;
   final Uint8List? profilePhotoBytes;
@@ -24,7 +22,6 @@ class RegistrationPayload {
   });
 }
 
-// Your existing TranslatorHelper
 class TranslatorHelper {
   static final translator = GoogleTranslator();
   static Future<String> translateText(String text, String toLangCode) async {
@@ -37,19 +34,13 @@ class TranslatorHelper {
   }
 }
 
-
-
-// The reusable library widget
 class RegistrationForm extends StatefulWidget {
   final ApiService apiService;
-  // Callback to run when the form is submitted successfully
   final Future<void> Function(RegistrationPayload payload) onFormSubmit;
-  // Parameters to customize the form
   final String submitButtonText;
   final bool isOtpFieldVisible;
-  final bool isLanguageSwitcherVisible;
   final String formTitle;
-  final bool isCreatedByAdmin;
+  final Map<String, dynamic>? initialData;
 
   const RegistrationForm({
     Key? key,
@@ -57,9 +48,8 @@ class RegistrationForm extends StatefulWidget {
     required this.onFormSubmit,
     this.submitButtonText = 'Create User',
     this.isOtpFieldVisible = true,
-    this.isLanguageSwitcherVisible = true,
     this.formTitle = 'Registration Form',
-    this.isCreatedByAdmin = false,
+    this.initialData,
   }) : super(key: key);
 
   @override
@@ -67,9 +57,9 @@ class RegistrationForm extends StatefulWidget {
 }
 
 class _RegistrationFormState extends State<RegistrationForm> {
-  // ALL of your original state variables and methods are moved here, unchanged.
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+  bool _isFetchingImage = false;
 
   Map<String, String> _translations = {};
   bool _isTranslating = false;
@@ -90,7 +80,7 @@ class _RegistrationFormState extends State<RegistrationForm> {
   final _mobileController = TextEditingController();
   final _otpController = TextEditingController();
   final _aadharController = TextEditingController();
-  final _locationController = TextEditingController(text: "salem");
+  final _locationController = TextEditingController();
   final _emergencyContactController = TextEditingController();
   final _skillController = TextEditingController();
 
@@ -111,9 +101,9 @@ class _RegistrationFormState extends State<RegistrationForm> {
   Uint8List? _finalProfileImageBytes;
   XFile? _idDocument;
 
-  String? _gender = 'Male';
-  String? _maritalStatus = 'Married';
-  String? _religion = 'Hindu';
+  String? _gender;
+  String? _maritalStatus;
+  String? _religion;
   String? _occupation;
   String? _skill;
   String? _bloodGroup;
@@ -123,13 +113,71 @@ class _RegistrationFormState extends State<RegistrationForm> {
   Timer? _timer;
   int _secondsRemaining = 0;
   
-  // UNCHANGED CODE from your original page
   @override
   void initState() {
     super.initState();
+    _initializeFormWithData();
     _addFocusListeners();
     _translateAll();
   }
+
+  void _initializeFormWithData() {
+    if (widget.initialData != null) {
+      final data = widget.initialData!;
+      _nameController.text = data['name'] ?? '';
+      _mobileController.text = data['mobile'] ?? '';
+      _aadharController.text = data['aadhar_number'] ?? '';
+      _emergencyContactController.text = data['emergency_contact'] ?? '';
+      _locationController.text = data['location'] ?? 'salem';
+      _skillController.text = data['skill'] ?? '';
+      
+      _gender = data['gender'];
+      _maritalStatus = data['marital_status'];
+      _religion = data['religion'];
+      _occupation = data['occupation'];
+      _skill = data['skill'];
+      _bloodGroup = data['blood_group'];
+      
+      final photoUrl = data['profile_photo_url'];
+      if (photoUrl != null && photoUrl.isNotEmpty) {
+        _loadInitialImage(photoUrl);
+      }
+
+    } else {
+      _locationController.text = "salem";
+      _gender = 'Male';
+      _maritalStatus = 'Married';
+      _religion = 'Hindu';
+    }
+  }
+
+  Future<void> _loadInitialImage(String imagePath) async {
+    // ⬇️ IMPORTANT: Replace this placeholder with your actual server URL
+    const String baseUrl = "http://your-server-api.com/path/to/images/";
+    final String fullUrl = baseUrl + imagePath;
+
+    setState(() => _isFetchingImage = true);
+    try {
+      final response = await http.get(Uri.parse(fullUrl));
+      if (response.statusCode == 200) {
+        if (mounted) {
+          setState(() {
+            _finalProfileImageBytes = response.bodyBytes;
+          });
+        }
+      } else {
+        _showMessage('Failed to load existing profile picture.', isError: true);
+      }
+    } catch (e) {
+      _showMessage('Error retrieving profile picture.', isError: true);
+      print("Error loading image from URL: $e");
+    } finally {
+      if (mounted) {
+        setState(() => _isFetchingImage = false);
+      }
+    }
+  }
+
 
   @override
   void dispose() {
@@ -208,7 +256,7 @@ class _RegistrationFormState extends State<RegistrationForm> {
 
   void _startTimer() {
     _timer?.cancel();
-    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_secondsRemaining <= 0) {
         timer.cancel();
         if (mounted) setState(() {});
@@ -220,8 +268,6 @@ class _RegistrationFormState extends State<RegistrationForm> {
     });
   }
 
-  // ### KEY CHANGE ###
-  // This method now calls the parent's callback instead of handling the API logic itself.
   Future<void> _handleFormSubmission() async {
     setState(() {
       _nameTouched = true; _mobileTouched = true; _otpTouched = true;
@@ -229,7 +275,7 @@ class _RegistrationFormState extends State<RegistrationForm> {
     });
 
     if (_formKey.currentState?.validate() ?? false) {
-      if (_finalProfileImageBytes == null) {
+      if (_finalProfileImageBytes == null && widget.initialData?['profile_photo_url'] == null) {
         _showMessage('Please upload a profile photo.', isError: true);
         return;
       }
@@ -247,7 +293,6 @@ class _RegistrationFormState extends State<RegistrationForm> {
         idDocument: _idDocument,
       );
       
-      // Execute the callback passed from the parent widget
       await widget.onFormSubmit(payload);
 
       if (mounted) {
@@ -258,7 +303,6 @@ class _RegistrationFormState extends State<RegistrationForm> {
     }
   }
 
-  // Your entire build method, unchanged.
   @override
   Widget build(BuildContext context) {
     return Form(
@@ -267,21 +311,21 @@ class _RegistrationFormState extends State<RegistrationForm> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(_t('formTitle'), textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color.fromARGB(255, 93, 213, 97))),
-          SizedBox(height: 20),
+          Text(_t('formTitle'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color.fromARGB(255, 93, 213, 97))),
+          const SizedBox(height: 20),
           _buildTextFields(),
           _buildRadioGroups(),
           _buildDropdownAndUploads(),
-          SizedBox(height: 30),
+          const SizedBox(height: 30),
           _isLoading
-              ? Center(child: CircularProgressIndicator())
+              ? const Center(child: CircularProgressIndicator())
               : ElevatedButton(
                   onPressed: _handleFormSubmission,
-                  child: Text(_t('createUser'), style: TextStyle(color: Colors.white)),
+                  child: Text(_t('createUser'), style: const TextStyle(color: Colors.white)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Color.fromARGB(255, 93, 213, 97),
-                    padding: EdgeInsets.symmetric(horizontal: 50, vertical: 15),
-                    textStyle: TextStyle(fontSize: 16),
+                    backgroundColor: const Color.fromARGB(255, 93, 213, 97),
+                    padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
+                    textStyle: const TextStyle(fontSize: 16),
                   ),
                 ),
         ],
@@ -289,34 +333,32 @@ class _RegistrationFormState extends State<RegistrationForm> {
     );
   }
 
-  // ALL your helper build methods, unchanged.
   Widget _buildTextFields() {
     return Column(
       children: [
         _buildBoxedTextField(controller: _nameController, focusNode: _nameFocus, hint: _t('fullName'), touched: _nameTouched, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]'))],
           validator: (value) { if (value == null || value.isEmpty) return _t('enterName'); if (value.length < 5) return _t('nameMinLength'); return null; },
         ),
-        SizedBox(height: 15),
+        const SizedBox(height: 15),
         _buildMobileFieldWithButton(),
-        // Conditionally show the OTP field
         if (widget.isOtpFieldVisible) ...[
-          SizedBox(height: 15),
+          const SizedBox(height: 15),
           _buildBoxedTextField(controller: _otpController, focusNode: _otpFocus, hint: _t('otp'), touched: _otpTouched, keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
             validator: (value) => value!.isEmpty ? _t('enterOTP') : null,
           ),
         ],
-        SizedBox(height: 15),
+        const SizedBox(height: 15),
         _buildBoxedTextField(controller: _aadharController, focusNode: _aadharFocus, hint: _t('aadhar'), touched: _aadharTouched, keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(12)],
           validator: (value) { if (value == null || value.isEmpty) return _t('enterAadhar'); if (value.length != 12) return _t('aadharLength'); return null; },
         ),
-        SizedBox(height: 15),
+        const SizedBox(height: 15),
         _buildBoxedTextField(controller: _emergencyContactController, focusNode: _emergencyContactFocus, hint: _t('emergency'), touched: _emergencyTouched, keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],
           validator: (value) { if (value == null || value.isEmpty) return _t('enterEmergency'); if (value.length != 10) return _t('emergencyLength'); return null; },
         ),
-        SizedBox(height: 15),
+        const SizedBox(height: 15),
         _buildBoxedTextField(controller: _locationController, focusNode: _locationFocus, hint: _t('location'), touched: _locationTouched,
           validator: (value) => value!.isEmpty ? _t('enterLocation') : null,
         ),
@@ -324,12 +366,6 @@ class _RegistrationFormState extends State<RegistrationForm> {
     );
   }
 
-  // ... (All other _build... methods are identical to your original code) ...
-  // _buildMobileFieldWithButton, _buildDropdownAndUploads, _buildBoxedTextField
-  // _buildRadioGroups, _buildRadioGroup, _buildDropdownField, _showSkillDialog
-
-  // NOTE: I am including the full code for the remaining builder methods
-  // to ensure nothing is missed, as per your request.
   Widget _buildMobileFieldWithButton() {
     bool hasFocus = _mobileFocus.hasFocus;
     String? errorText;
@@ -344,17 +380,18 @@ class _RegistrationFormState extends State<RegistrationForm> {
 
     return TextFormField(
       controller: _mobileController, focusNode: _mobileFocus, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],
+      readOnly: widget.initialData != null,
       decoration: InputDecoration(
-        hintText: hasFocus || _mobileController.text.isNotEmpty ? null : _t('mobile'), errorText: errorText, filled: true, fillColor: Colors.white, contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        hintText: hasFocus || _mobileController.text.isNotEmpty ? null : _t('mobile'), errorText: errorText, filled: true, fillColor: Colors.white, contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: finalBorderColor, width: 1.2)),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: finalBorderColor, width: 2.0)),
-        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.red, width: 1.2)),
-        focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.red, width: 2.0)),
-        suffixIcon: _isLoading && !_otpSent
-            ? Padding(padding: const EdgeInsets.all(12.0), child: CircularProgressIndicator(strokeWidth: 2))
+        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.red, width: 1.2)),
+        focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.red, width: 2.0)),
+        suffixIcon: widget.isOtpFieldVisible ? (_isLoading && !_otpSent
+            ? const Padding(padding: EdgeInsets.all(12.0), child: CircularProgressIndicator(strokeWidth: 2))
             : (_secondsRemaining > 0
-                ? Center(widthFactor: 1, child: Text('$_secondsRemaining s', style: TextStyle(color: Colors.grey)))
-                : TextButton(onPressed: _sendOtp, child: Text(_otpSent ? "Resend" : "Send OTP"))),
+                ? Center(widthFactor: 1, child: Text('$_secondsRemaining s', style: const TextStyle(color: Colors.grey)))
+                : TextButton(onPressed: _sendOtp, child: Text(_otpSent ? "Resend" : "Send OTP"), style: TextButton.styleFrom(foregroundColor: Colors.green.shade700)))) : null,
       ),
       onTap: () => setState(() {}), onChanged: (_) => setState(() {}),
     );
@@ -364,40 +401,51 @@ class _RegistrationFormState extends State<RegistrationForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(height: 15),
+        const SizedBox(height: 15),
         _buildDropdownField(),
-        SizedBox(height: 15),
+        const SizedBox(height: 15),
         DropdownButtonFormField<String>(
           value: _bloodGroup, hint: Text(_t('bloodGroup')), decoration: InputDecoration(filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)),
           items: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((val) => DropdownMenuItem<String>(value: val, child: Text(val))).toList(),
           onChanged: (val) => setState(() => _bloodGroup = val), validator: (value) => value == null ? _t('selectBloodGroup') : null,
         ),
-        SizedBox(height: 20),
+        const SizedBox(height: 20),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround, crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: Column(
                 children: [
-                  Text(_t('uploadPhoto'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), SizedBox(height: 8),
-                  if (_finalProfileImageBytes != null) Column(
-                        children: [
-                          ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.memory(_finalProfileImageBytes!, height: 100, width: 100, fit: BoxFit.cover)),
-                          TextButton(onPressed: () => setState(() => _finalProfileImageBytes = null), child: Text(_t('changePhoto'))),
-                        ],
-                      )
-                  else ProfilePicturePicker(
-                        onImageSelected: (file) async { final bytes = await file.readAsBytes(); setState(() => _finalProfileImageBytes = bytes); },
-                        onWebImageSelected: (bytes) { setState(() => _finalProfileImageBytes = bytes); },
-                      ),
+                  Text(_t('uploadPhoto'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), const SizedBox(height: 8),
+                  _isFetchingImage
+                    ? const CircularProgressIndicator()
+                    : _finalProfileImageBytes != null 
+                      ? Column(
+                          children: [
+                            ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.memory(_finalProfileImageBytes!, height: 100, width: 100, fit: BoxFit.cover)),
+                            TextButton(onPressed: () => setState(() => _finalProfileImageBytes = null), child: Text(_t('changePhoto')), style: TextButton.styleFrom(foregroundColor: Colors.green.shade700)),
+                          ],
+                        )
+                      : ProfilePicturePicker(
+                          onImageSelected: (file) async { final bytes = await file.readAsBytes(); setState(() => _finalProfileImageBytes = bytes); },
+                          onWebImageSelected: (bytes) { setState(() => _finalProfileImageBytes = bytes); },
+                        ),
                 ],
               ),
             ),
             Expanded(
               child: Column(
                 children: [
-                  Text(_t('uploadID'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), SizedBox(height: 8),
-                  ElevatedButton.icon(onPressed: _pickIdDocument, icon: Icon(Icons.attach_file), label: Text(_idDocument == null ? _t('uploadIdBtn') : _t('changeID'))),
+                  Text(_t('uploadID'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), const SizedBox(height: 8),
+                  ElevatedButton.icon(
+                    onPressed: _pickIdDocument, 
+                    icon: const Icon(Icons.attach_file), 
+                    label: Text(_idDocument == null ? _t('uploadIdBtn') : _t('changeID')),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey.shade200,
+                      foregroundColor: Colors.green.shade800,
+                    ),
+                  ),
                   if (_idDocument != null) Padding(
                         padding: const EdgeInsets.only(top: 8.0),
                         child: kIsWeb ? Image.network(_idDocument!.path, height: 100, width: 100, fit: BoxFit.cover) : Image.file(File(_idDocument!.path), height: 100, width: 100, fit: BoxFit.cover),
@@ -420,11 +468,11 @@ class _RegistrationFormState extends State<RegistrationForm> {
     return TextFormField(
       controller: controller, focusNode: focusNode, keyboardType: keyboardType, inputFormatters: inputFormatters,
       decoration: InputDecoration(
-        hintText: focusNode.hasFocus || controller.text.isNotEmpty ? null : hint, errorText: errorText, filled: true, fillColor: Colors.white, contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        hintText: focusNode.hasFocus || controller.text.isNotEmpty ? null : hint, errorText: errorText, filled: true, fillColor: Colors.white, contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: finalBorderColor, width: 1.2)),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: finalBorderColor, width: 2.0)),
-        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.red, width: 1.2)),
-        focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.red, width: 2.0)),
+        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.red, width: 1.2)),
+        focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.red, width: 2.0)),
       ),
       onTap: () => setState(() {}), onChanged: (_) => setState(() {}),
     );
@@ -434,7 +482,7 @@ class _RegistrationFormState extends State<RegistrationForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(height: 15),
+        const SizedBox(height: 15),
         _buildRadioGroup<String>(label: _t('gender'), value: _gender, options: [_t('male'), _t('female')], originalOptions: ['Male', 'Female'], onChanged: (val) => setState(() => _gender = val)),
         _buildRadioGroup<String>(label: _t('maritalStatus'), value: _maritalStatus, options: [_t('married'), _t('single'), _t('widow'), _t('separated')], originalOptions: ['Married', 'Single', 'Widow', 'Separated'], onChanged: (val) => setState(() => _maritalStatus = val)),
         _buildRadioGroup<String>(label: _t('religion'), value: _religion, options: [_t('hindu'), _t('christianity'), _t('islam'), _t('other')], originalOptions: ['Hindu', 'Christianity', 'Islam', 'Other'], onChanged: (val) => setState(() => _religion = val)),
@@ -446,13 +494,13 @@ class _RegistrationFormState extends State<RegistrationForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(padding: const EdgeInsets.only(top: 8.0, bottom: 4.0), child: Text(label, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+        Padding(padding: const EdgeInsets.only(top: 8.0, bottom: 4.0), child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
         Wrap(
           alignment: WrapAlignment.start, spacing: 10,
           children: List.generate(options.length, (index) {
             final displayOption = options[index];
             final valueOption = originalOptions[index];
-            return Row(mainAxisSize: MainAxisSize.min, children: [ Radio<T>(value: valueOption, groupValue: value, onChanged: onChanged), Text(displayOption.toString()), ]);
+            return Row(mainAxisSize: MainAxisSize.min, children: [ Radio<T>(value: valueOption, groupValue: value, onChanged: onChanged, activeColor: Colors.green), Text(displayOption.toString()), ]);
           }),
         ),
       ],
@@ -465,10 +513,10 @@ class _RegistrationFormState extends State<RegistrationForm> {
       children: [
         DropdownButtonFormField<String>(
           value: _occupation, hint: Text(_t('occupation')), decoration: InputDecoration(filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
-          items: [ DropdownMenuItem<String>(value: "Business", child: Text(_t('business'))), DropdownMenuItem<String>(value: "Agriculture", child: Text(_t('agriculture'))), DropdownMenuItem<String>(value: "Agri Labour", child: Text(_t('agriLabour'))), DropdownMenuItem<String>(value: "Skill Labour", child: Text(_t('skillLabour')))],
+          items: [ const DropdownMenuItem<String>(value: "Business", child: Text('Business')), const DropdownMenuItem<String>(value: "Agriculture", child: Text('Agriculture')), const DropdownMenuItem<String>(value: "Agri Labour", child: Text('Agri Labour')), const DropdownMenuItem<String>(value: "Skill Labour", child: Text('Skill Labour'))],
           onChanged: (val) { setState(() { _occupation = val; if (val == 'Skill Labour') { _showSkillDialog(); } else { _skill = null; } }); },
         ),
-        if (_occupation == 'Skill Labour' && _skill != null && _skill!.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8.0, left: 10.0), child: Text('${_t('enteredSkill')}: $_skill', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
+        if (_occupation == 'Skill Labour' && _skill != null && _skill!.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8.0, left: 10.0), child: Text('${_t('enteredSkill')}: $_skill', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
       ],
     );
   }
