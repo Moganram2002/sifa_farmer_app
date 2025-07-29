@@ -7,6 +7,7 @@ import '../models/user_data.dart';
 import '../services/api_service.dart';
 import '../utils/auth_storage.dart';
 import '/libraries/copyright_footer.dart';
+import '../services/app_config_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({Key? key}) : super(key: key);
@@ -304,17 +305,26 @@ class _LoginPageState extends State<LoginPage> {
     });
   }
 
+ 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFE8F5E9),
       appBar: AppBar(
-        title: const Text("South Indian Farmers Society(SIFS)", style: TextStyle(fontWeight: FontWeight.bold)), centerTitle: true,
+        
+        title: ValueListenableBuilder<String>(
+          valueListenable: AppConfigService.appTitleNotifier,
+          builder: (context, title, child) {
+            return Text(title, style: const TextStyle(fontWeight: FontWeight.bold));
+          },
+        ),
+        centerTitle: true,
         backgroundColor: const Color.fromARGB(255, 93, 215, 97),
         foregroundColor: const Color.fromARGB(255, 241, 243, 241),
         elevation: 2,
       ),
       body: Column(
+      
         children: [
           Expanded(
             child: Padding(

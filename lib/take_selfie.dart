@@ -29,10 +29,9 @@ class _TakeSelfieWebWidgetState extends State<TakeSelfieWebWidget> {
   Future<void> _initializeCamera() async {
     try {
       final cameras = await availableCameras();
-      // Use the front camera if available
       final frontCamera = cameras.firstWhere(
         (camera) => camera.lensDirection == CameraLensDirection.front,
-        orElse: () => cameras.first, // Fallback to the first camera
+        orElse: () => cameras.first, 
       );
 
       _cameraController = CameraController(
@@ -45,7 +44,6 @@ class _TakeSelfieWebWidgetState extends State<TakeSelfieWebWidget> {
         setState(() {});
       }
     } catch (e) {
-      // Handle camera initialization error
       print("Error initializing camera: $e");
     }
   }

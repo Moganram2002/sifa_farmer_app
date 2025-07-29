@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -9,16 +7,19 @@ import 'package:translator/translator.dart';
 import 'package:http/http.dart' as http;
 import '../services/api_service.dart';
 import '../profile_picture_picker.dart';
+import '../utils/auth_storage.dart';
 
 class RegistrationPayload {
   final Map<String, String?> userData;
   final Uint8List? profilePhotoBytes;
-  final XFile? idDocument;
+  final Uint8List? idDocumentBytes;
+  final String? idDocumentName;
 
   RegistrationPayload({
     required this.userData,
     this.profilePhotoBytes,
-    this.idDocument,
+    this.idDocumentBytes,
+    this.idDocumentName,
   });
 }
 
@@ -67,9 +68,9 @@ class _RegistrationFormState extends State<RegistrationForm> {
     'formTitle': 'Registration Form', 'fullName': 'Full Name', 'mobile': 'Mobile Number', 'otp': 'OTP', 'aadhar': 'Aadhar Number', 'emergency': 'Emergency Contact',
     'location': 'Location', 'bloodGroup': 'Select Blood Group', 'uploadPhoto': 'Profile Photo', 'changePhoto': 'Change Photo', 'uploadID': 'ID Card', 
     'changeID': 'Change ID Document', 'createUser': 'Create User', 'gender': 'Gender', 'maritalStatus': 'Marital Status', 'religion': 'Religion', 
-    'occupation': 'Select Occupation', 'enterSkill': 'Enter Skill', 'enteredSkill': 'Entered Skill', 'male': 'Male', 'female': 'Female', 'married': 'Married', 
+    'occupation': 'Select Occupation', 'enterSkill': 'Enter Occupation', 'enteredSkill': 'Entered Occupation', 'male': 'Male', 'female': 'Female', 'married': 'Married', 
     'single': 'Single', 'widow': 'Widow', 'separated': 'Separated', 'hindu': 'Hindu', 'christianity': 'Christianity', 'islam': 'Islam', 'other': 'Other', 
-    'business': 'Business', 'agriculture': 'Agriculture', 'agriLabour': 'Agri Labour', 'skillLabour': 'Skill Labour', 'enterName': 'Enter Name', 
+    'business': 'Business', 'agriculture': 'Agriculture', 'agriLabour': 'Agri Labour', 'skillLabour': 'Other', 'enterName': 'Enter Name', 
     'nameMinLength': 'Name must be more than 5 letters', 'nameOnlyAlphabets': 'Only alphabets and spaces allowed', 'enterMobile': 'Enter your mobile number',
     'mobileLength': 'Mobile number must be 10 digits', 'enterOTP': 'Enter OTP', 'enterAadhar': 'Enter your Aadhar number', 'aadharLength': 'Aadhar number must be 12 digits',
     'enterEmergency': 'Enter emergency contact', 'emergencyLength': 'Emergency contact must be 10 digits', 'enterLocation': 'Please enter location',
@@ -99,7 +100,9 @@ class _RegistrationFormState extends State<RegistrationForm> {
   bool _emergencyTouched = false;
 
   Uint8List? _finalProfileImageBytes;
-  XFile? _idDocument;
+  
+  Uint8List? _idDocumentBytes;
+  String? _idDocumentName;
 
   String? _gender;
   String? _maritalStatus;
@@ -112,6 +115,9 @@ class _RegistrationFormState extends State<RegistrationForm> {
   bool _otpSent = false;
   Timer? _timer;
   int _secondsRemaining = 0;
+
+  List<String> _skillSuggestions = [];
+  bool _isFetchingSkills = false;
   
   @override
   void initState() {
@@ -119,6 +125,26 @@ class _RegistrationFormState extends State<RegistrationForm> {
     _initializeFormWithData();
     _addFocusListeners();
     _translateAll();
+    _fetchSkills();
+  }
+
+  Future<void> _fetchSkills() async {
+    if (_isFetchingSkills) return;
+    setState(() => _isFetchingSkills = true);
+    try {
+      final skills = await widget.apiService.getSkills();
+      if (mounted) {
+        setState(() {
+          _skillSuggestions = skills;
+        });
+      }
+    } catch (e) {
+      print("Failed to fetch skill suggestions: $e");
+    } finally {
+      if (mounted) {
+        setState(() => _isFetchingSkills = false);
+      }
+    }
   }
 
   void _initializeFormWithData() {
@@ -152,13 +178,22 @@ class _RegistrationFormState extends State<RegistrationForm> {
   }
 
   Future<void> _loadInitialImage(String imagePath) async {
-    // ⬇️ IMPORTANT: Replace this placeholder with your actual server URL
-    const String baseUrl = "http://your-server-api.com/path/to/images/";
+    const String baseUrl = "http://localhost:3000/uploads/";
     final String fullUrl = baseUrl + imagePath;
 
     setState(() => _isFetchingImage = true);
     try {
-      final response = await http.get(Uri.parse(fullUrl));
+      final String? token = await AuthStorage.getToken();
+      if (token == null) {
+        _showMessage('Authentication error.', isError: true);
+        return;
+      }
+      
+      final response = await http.get(
+        Uri.parse(fullUrl),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      
       if (response.statusCode == 200) {
         if (mounted) {
           setState(() {
@@ -177,7 +212,6 @@ class _RegistrationFormState extends State<RegistrationForm> {
       }
     }
   }
-
 
   @override
   void dispose() {
@@ -221,8 +255,14 @@ class _RegistrationFormState extends State<RegistrationForm> {
 
   Future<void> _pickIdDocument() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) setState(() => _idDocument = picked);
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      final bytes = await pickedFile.readAsBytes();
+      setState(() {
+        _idDocumentBytes = bytes;
+        _idDocumentName = pickedFile.name;
+      });
+    }
   }
   
   void _showMessage(String text, {bool isError = false}) {
@@ -290,7 +330,8 @@ class _RegistrationFormState extends State<RegistrationForm> {
           "otp": _otpController.text,
         },
         profilePhotoBytes: _finalProfileImageBytes,
-        idDocument: _idDocument,
+        idDocumentBytes: _idDocumentBytes,
+        idDocumentName: _idDocumentName,
       );
       
       await widget.onFormSubmit(payload);
@@ -330,6 +371,104 @@ class _RegistrationFormState extends State<RegistrationForm> {
                 ),
         ],
       ),
+    );
+  }
+
+  // --- MODIFIED: This dialog now has an OK button ---
+  void _showSkillDialog() {
+    // Create a controller here to access the text field's value in the actions.
+    final skillInputController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(_t('enterSkill')),
+        content: Autocomplete<String>(
+          // This builder creates the text field.
+          fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+            // We need to sync our external controller with the Autocomplete's internal one.
+            skillInputController.text = controller.text;
+            return TextFormField(
+              controller: controller, // Use Autocomplete's controller for its internal logic
+              focusNode: focusNode,
+              autofocus: true,
+              decoration: InputDecoration(hintText: _t('enterSkill')),
+              onChanged: (value) {
+                // Keep our external controller updated as the user types
+                skillInputController.text = value;
+              },
+              onFieldSubmitted: (value) {
+                // If user presses enter, confirm and close.
+                setState(() => _skill = value);
+                Navigator.of(ctx).pop();
+              },
+            );
+          },
+          // This builder provides the suggestion list.
+          optionsBuilder: (TextEditingValue textEditingValue) {
+            if (textEditingValue.text.isEmpty) {
+              return const Iterable<String>.empty();
+            }
+            return _skillSuggestions.where((option) =>
+                option.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+          },
+          // This is called when a user taps a suggestion.
+          onSelected: (String selection) {
+            setState(() => _skill = selection);
+            Navigator.of(ctx).pop();
+          },
+        ),
+        actions: [
+          TextButton(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.of(ctx).pop(),
+          ),
+          // This is the new "OK" button.
+          TextButton(
+            child: Text(_t('ok')),
+            onPressed: () {
+              // When pressed, it takes the text from our external controller,
+              // sets the state, and closes the dialog.
+              setState(() => _skill = skillInputController.text);
+              Navigator.of(ctx).pop();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDropdownField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        DropdownButtonFormField<String>(
+          value: _occupation,
+          hint: Text(_t('occupation')),
+          decoration: InputDecoration(filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+          items: [ 
+             const DropdownMenuItem<String>(value: "Business", child: Text('Business')), 
+             const DropdownMenuItem<String>(value: "Agriculture", child: Text('Agriculture')), 
+             const DropdownMenuItem<String>(value: "Agri Labour", child: Text('Agri Labour')), 
+             const DropdownMenuItem<String>(value: "Skill Labour", child: Text('Others'))
+          ],
+          onChanged: (val) {
+            setState(() {
+              _occupation = val;
+              if (val == 'Skill Labour') {
+                _showSkillDialog(); // Use the new dialog
+              } else {
+                _skill = null;
+              }
+            });
+          },
+        ),
+        if (_occupation == 'Skill Labour' && _skill != null && _skill!.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0, left: 10.0),
+            child: Text('${_t('enteredSkill')}: $_skill', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500))
+          ),
+      ],
     );
   }
 
@@ -440,15 +579,18 @@ class _RegistrationFormState extends State<RegistrationForm> {
                   ElevatedButton.icon(
                     onPressed: _pickIdDocument, 
                     icon: const Icon(Icons.attach_file), 
-                    label: Text(_idDocument == null ? _t('uploadIdBtn') : _t('changeID')),
+                    label: Text(_idDocumentBytes == null ? _t('uploadIdBtn') : _t('changeID')),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.grey.shade200,
                       foregroundColor: Colors.green.shade800,
                     ),
                   ),
-                  if (_idDocument != null) Padding(
+                  if (_idDocumentBytes != null) Padding(
                         padding: const EdgeInsets.only(top: 8.0),
-                        child: kIsWeb ? Image.network(_idDocument!.path, height: 100, width: 100, fit: BoxFit.cover) : Image.file(File(_idDocument!.path), height: 100, width: 100, fit: BoxFit.cover),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.memory(_idDocumentBytes!, height: 100, width: 100, fit: BoxFit.cover),
+                        ),
                       ),
                 ],
               ),
@@ -458,7 +600,7 @@ class _RegistrationFormState extends State<RegistrationForm> {
       ],
     );
   }
-
+  
   Widget _buildBoxedTextField({ required TextEditingController controller, required FocusNode focusNode, required String hint, required bool touched, String? Function(String?)? validator, TextInputType? keyboardType, List<TextInputFormatter>? inputFormatters,}) {
     String? errorText = touched ? validator?.call(controller.text) : null;
     bool isInvalid = errorText != null;
@@ -504,30 +646,6 @@ class _RegistrationFormState extends State<RegistrationForm> {
           }),
         ),
       ],
-    );
-  }
-
-  Widget _buildDropdownField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        DropdownButtonFormField<String>(
-          value: _occupation, hint: Text(_t('occupation')), decoration: InputDecoration(filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
-          items: [ const DropdownMenuItem<String>(value: "Business", child: Text('Business')), const DropdownMenuItem<String>(value: "Agriculture", child: Text('Agriculture')), const DropdownMenuItem<String>(value: "Agri Labour", child: Text('Agri Labour')), const DropdownMenuItem<String>(value: "Skill Labour", child: Text('Skill Labour'))],
-          onChanged: (val) { setState(() { _occupation = val; if (val == 'Skill Labour') { _showSkillDialog(); } else { _skill = null; } }); },
-        ),
-        if (_occupation == 'Skill Labour' && _skill != null && _skill!.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8.0, left: 10.0), child: Text('${_t('enteredSkill')}: $_skill', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
-      ],
-    );
-  }
-
-  void _showSkillDialog() {
-    final skillController = TextEditingController(text: _skill);
-    showDialog(
-      context: context, builder: (ctx) => AlertDialog(
-        title: Text(_t('enterSkill')), content: TextField(controller: skillController, decoration: InputDecoration(hintText: _t('enterSkill'))),
-        actions: [ TextButton(onPressed: () { setState(() => _skill = skillController.text); Navigator.of(ctx).pop(); }, child: Text(_t('ok'))), ],
-      ),
     );
   }
 }

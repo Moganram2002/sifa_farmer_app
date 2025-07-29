@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../libraries/copyright_footer.dart';
 import '../libraries/registration_form_widget.dart';
+import '../services/app_config_service.dart';
 
 class RegistrationPage extends StatefulWidget {
   @override
@@ -13,10 +14,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
   Future<void> _registerUser(RegistrationPayload payload) async {
     try {
+      
       final response = await _apiService.register(
-        payload.userData,
-        payload.profilePhotoBytes,
-        payload.idDocument,
+        userData: payload.userData,
+        profilePhotoBytes: payload.profilePhotoBytes,
+        idDocumentBytes: payload.idDocumentBytes,
+        idDocumentName: payload.idDocumentName,
       );
 
       if (!mounted) return;
@@ -44,7 +47,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('South India Farmers Society(SIFS)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: ValueListenableBuilder<String>(
+          valueListenable: AppConfigService.appTitleNotifier,
+          builder: (context, title, child) {
+            return Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold));
+          },
+        ),
         centerTitle: true,
         backgroundColor: Color.fromARGB(255, 93, 213, 97),
         leading: IconButton(

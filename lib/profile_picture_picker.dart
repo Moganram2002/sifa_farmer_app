@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:crop_your_image/crop_your_image.dart';
-import 'take_selfie.dart'; // Ensure this file exists in the same directory
+import 'take_selfie.dart'; 
 
 class ProfilePicturePicker extends StatefulWidget {
   final void Function(File file)? onImageSelected;
@@ -55,26 +55,22 @@ class _ProfilePicturePickerState extends State<ProfilePicturePicker> {
         _showCropper = false;
       });
     } else {
-      // For mobile, you might want to save the cropped bytes to a new file,
-      // but for simplicity, we pass the original file reference and the cropped bytes.
-      // The parent widget will handle the bytes.
-      widget.onWebImageSelected?.call(croppedData); // Use the bytes callback for mobile too
+     
+      widget.onWebImageSelected?.call(croppedData); 
       setState(() {
         _showCropper = false;
-        // You can optionally update the _pickedFile with the new bytes if needed
       });
     }
   }
 
   Widget _imagePreview() {
-    // This preview is now handled by the parent widget (RegistrationPage)
-    // to show the final cropped image. This widget will just show the buttons.
+    
     return const SizedBox.shrink(); 
   }
 
   @override
   Widget build(BuildContext context) {
-    // If the cropper is active, show it. Otherwise, show the selection buttons.
+
     if (_showCropper && (kIsWeb ? _webImageBytes != null : _pickedFile != null)) {
       return Column(
         children: [
@@ -112,7 +108,7 @@ class _ProfilePicturePickerState extends State<ProfilePicturePicker> {
       );
     }
     
-    // Default view: Show the upload and selfie buttons
+  
     return Column(
       children: [
         Row(
@@ -136,7 +132,7 @@ class _ProfilePicturePickerState extends State<ProfilePicturePicker> {
                         height: 500,
                         child: TakeSelfieWebWidget(
                           onCropped: (croppedBytes) {
-                            // This callback receives the final cropped image from the selfie widget
+                            
                             widget.onWebImageSelected?.call(croppedBytes);
                             setState(() {
                               _webImageBytes = croppedBytes;

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/app_config_service.dart'; 
 
 class CopyrightFooter extends StatelessWidget {
   const CopyrightFooter({Key? key}) : super(key: key);
@@ -10,13 +11,19 @@ class CopyrightFooter extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       alignment: Alignment.center,
-      child: const Text(
-        "© CShiine Tech 2025",
-        style: TextStyle(
-          fontSize: 14,
-          color: Colors.white,
-          fontWeight: FontWeight.bold,
-        ),
+      child: ValueListenableBuilder<String>(
+        valueListenable: AppConfigService.copyrightNotifier,
+        builder: (context, copyrightText, child) {
+        
+          return Text(
+            copyrightText,
+            style: const TextStyle(
+              fontSize: 14,
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          );
+        },
       ),
     );
   }
