@@ -95,12 +95,12 @@ class _ProfilePicturePickerState extends State<ProfilePicturePicker> {
             children: [
               TextButton(
                 onPressed: () => setState(() => _showCropper = false),
-                child: const Text("Cancel"),
+                child: const Text("Cancel",style: TextStyle(color: Color.fromARGB(255, 101, 156, 98))),
               ),
               SizedBox(width: 10),
               ElevatedButton(
                 onPressed: () => _cropController.crop(),
-                child: const Text("Crop & Use"),
+                child: const Text("Crop & Use",style: TextStyle(color: Color.fromARGB(255, 101, 156, 98))),
               ),
             ],
           )
@@ -116,8 +116,8 @@ class _ProfilePicturePickerState extends State<ProfilePicturePicker> {
           children: [
             ElevatedButton.icon(
               onPressed: () => _pickImage(ImageSource.gallery),
-              icon: const Icon(Icons.upload_file),
-              label: const Text('Upload'),
+              icon: const Icon(Icons.upload_file,color: Color.fromARGB(255, 130, 136, 129)),
+              label: const Text('Upload',style: TextStyle(color: Color.fromARGB(255, 101, 156, 98))),
             ),
             const SizedBox(width: 10),
             ElevatedButton.icon(
@@ -126,7 +126,7 @@ class _ProfilePicturePickerState extends State<ProfilePicturePicker> {
                   showDialog(
                     context: context,
                     builder: (_) => AlertDialog(
-                      title: const Text("Take a Selfie"),
+                      title: const Text("Take a Selfie",style: TextStyle(color: Color.fromARGB(255, 101, 156, 98))),
                       content: SizedBox(
                         width: 400,
                         height: 500,
@@ -145,11 +145,11 @@ class _ProfilePicturePickerState extends State<ProfilePicturePicker> {
                     ),
                   );
                 } else {
-                  _pickImage(ImageSource.camera);
+                  _pickImage(ImageSource.camera,);
                 }
               },
-              icon: const Icon(Icons.camera_alt),
-              label: const Text('Take Selfie'),
+              icon: const Icon(Icons.camera_alt,color: Color.fromARGB(255, 123, 131, 122)),
+              label: const Text('Take Selfie',style: TextStyle(color: Color.fromARGB(255, 101, 156, 98))),
             ),
           ],
         ),

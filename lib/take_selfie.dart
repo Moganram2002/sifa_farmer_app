@@ -95,7 +95,7 @@ class _TakeSelfieWebWidgetState extends State<TakeSelfieWebWidget> {
               SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () => _cropController.crop(),
-                child: const Text("Crop & Use"),
+                child: const Text("Crop & Use", style: TextStyle(color: Color.fromARGB(255, 101, 156, 98))),
               ),
             ],
           )
@@ -116,7 +116,7 @@ class _TakeSelfieWebWidgetState extends State<TakeSelfieWebWidget> {
                     ElevatedButton.icon(
                       onPressed: _capturePhoto,
                       icon: const Icon(Icons.camera),
-                      label: const Text("Capture Selfie"),
+                      label: const Text("Capture Selfie",style: TextStyle(color: Color.fromARGB(255, 101, 156, 98))),
                     ),
                   ],
                 );

@@ -1,3 +1,4 @@
+// lib/libraries/registration_form_widget.dart
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -98,6 +99,8 @@ class _RegistrationFormState extends State<RegistrationForm> {
   bool _aadharTouched = false;
   bool _locationTouched = false;
   bool _emergencyTouched = false;
+  bool _occupationTouched = false;
+  bool _bloodGroupTouched = false;
 
   Uint8List? _finalProfileImageBytes;
   
@@ -109,6 +112,7 @@ class _RegistrationFormState extends State<RegistrationForm> {
   String? _religion;
   String? _occupation;
   String? _skill;
+  String? _acresOfLand; // <-- ADD THIS NEW STATE VARIABLE
   String? _bloodGroup;
   String _selectedLanguage = 'en';
 
@@ -162,6 +166,7 @@ class _RegistrationFormState extends State<RegistrationForm> {
       _religion = data['religion'];
       _occupation = data['occupation'];
       _skill = data['skill'];
+      _acresOfLand = data['acres_of_land']; // <-- ADD THIS LINE
       _bloodGroup = data['blood_group'];
       
       final photoUrl = data['profile_photo_url'];
@@ -178,8 +183,8 @@ class _RegistrationFormState extends State<RegistrationForm> {
   }
 
   Future<void> _loadInitialImage(String imagePath) async {
-    const String baseUrl = "http://localhost:3000/uploads/";
-    final String fullUrl = baseUrl + imagePath;
+    final String baseUrl = widget.apiService.getBaseUrlForImages();
+    final String fullUrl = '$baseUrl/uploads/$imagePath';
 
     setState(() => _isFetchingImage = true);
     try {
@@ -327,6 +332,7 @@ class _RegistrationFormState extends State<RegistrationForm> {
           "name": _nameController.text, "mobile": _mobileController.text, "aadhar_number": _aadharController.text,
           "emergency_contact": _emergencyContactController.text, "location": _locationController.text, "blood_group": _bloodGroup,
           "gender": _gender, "marital_status": _maritalStatus, "religion": _religion, "occupation": _occupation, "skill": _skill,
+          "acres_of_land": _acresOfLand, // <-- ADD THIS LINE
           "otp": _otpController.text,
         },
         profilePhotoBytes: _finalProfileImageBytes,
@@ -374,37 +380,29 @@ class _RegistrationFormState extends State<RegistrationForm> {
     );
   }
 
-  // --- MODIFIED: This dialog now has an OK button ---
   void _showSkillDialog() {
-    // Create a controller here to access the text field's value in the actions.
     final skillInputController = TextEditingController();
-
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(_t('enterSkill')),
         content: Autocomplete<String>(
-          // This builder creates the text field.
           fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-            // We need to sync our external controller with the Autocomplete's internal one.
             skillInputController.text = controller.text;
             return TextFormField(
-              controller: controller, // Use Autocomplete's controller for its internal logic
+              controller: controller,
               focusNode: focusNode,
               autofocus: true,
               decoration: InputDecoration(hintText: _t('enterSkill')),
               onChanged: (value) {
-                // Keep our external controller updated as the user types
                 skillInputController.text = value;
               },
               onFieldSubmitted: (value) {
-                // If user presses enter, confirm and close.
                 setState(() => _skill = value);
                 Navigator.of(ctx).pop();
               },
             );
           },
-          // This builder provides the suggestion list.
           optionsBuilder: (TextEditingValue textEditingValue) {
             if (textEditingValue.text.isEmpty) {
               return const Iterable<String>.empty();
@@ -412,7 +410,6 @@ class _RegistrationFormState extends State<RegistrationForm> {
             return _skillSuggestions.where((option) =>
                 option.toLowerCase().contains(textEditingValue.text.toLowerCase()));
           },
-          // This is called when a user taps a suggestion.
           onSelected: (String selection) {
             setState(() => _skill = selection);
             Navigator.of(ctx).pop();
@@ -423,12 +420,9 @@ class _RegistrationFormState extends State<RegistrationForm> {
             child: const Text('Cancel'),
             onPressed: () => Navigator.of(ctx).pop(),
           ),
-          // This is the new "OK" button.
           TextButton(
             child: Text(_t('ok')),
             onPressed: () {
-              // When pressed, it takes the text from our external controller,
-              // sets the state, and closes the dialog.
               setState(() => _skill = skillInputController.text);
               Navigator.of(ctx).pop();
             },
@@ -439,13 +433,27 @@ class _RegistrationFormState extends State<RegistrationForm> {
   }
 
   Widget _buildDropdownField() {
+    String? errorText = _occupationTouched && _occupation == null ? _t('selectOccupation') : null;
+    bool isInvalid = errorText != null;
+    bool isValid = !isInvalid && _occupationTouched && _occupation != null;
+    Color getBorderColor() { if (isValid) return Colors.green; if (isInvalid) return Colors.red; return Colors.grey.shade400; }
+    final Color finalBorderColor = getBorderColor();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         DropdownButtonFormField<String>(
           value: _occupation,
           hint: Text(_t('occupation')),
-          decoration: InputDecoration(filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.white,
+            errorText: errorText,
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: finalBorderColor, width: 1.2)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: finalBorderColor, width: 2.0)),
+            errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.red, width: 1.2)),
+            focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.red, width: 2.0)),
+          ),
           items: [ 
              const DropdownMenuItem<String>(value: "Business", child: Text('Business')), 
              const DropdownMenuItem<String>(value: "Agriculture", child: Text('Agriculture')), 
@@ -454,15 +462,37 @@ class _RegistrationFormState extends State<RegistrationForm> {
           ],
           onChanged: (val) {
             setState(() {
+              _occupationTouched = true;
               _occupation = val;
+              _skill = null;
+              _acresOfLand = null; 
               if (val == 'Skill Labour') {
-                _showSkillDialog(); // Use the new dialog
-              } else {
-                _skill = null;
+                _showSkillDialog();
               }
             });
           },
+          validator: (value) => value == null ? _t('selectOccupation') : null,
         ),
+        
+        if (_occupation == 'Agriculture')
+          Padding(
+            padding: const EdgeInsets.only(top: 15.0),
+            child: DropdownButtonFormField<String>(
+              value: _acresOfLand,
+              hint: const Text('Total number of acres'),
+              decoration: InputDecoration(filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+              items: ['0', '1', '2', '3', '4', '5', 'More than 5']
+                  .map((label) => DropdownMenuItem(child: Text(label), value: label))
+                  .toList(),
+              onChanged: (val) {
+                setState(() {
+                  _acresOfLand = val;
+                });
+              },
+              validator: (value) => value == null ? 'Please select number of acres' : null,
+            ),
+          ),
+
         if (_occupation == 'Skill Labour' && _skill != null && _skill!.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 8.0, left: 10.0),
@@ -536,7 +566,13 @@ class _RegistrationFormState extends State<RegistrationForm> {
     );
   }
 
-  Widget _buildDropdownAndUploads() {
+   Widget _buildDropdownAndUploads() {
+    String? bloodGroupErrorText = _bloodGroupTouched && _bloodGroup == null ? _t('selectBloodGroup') : null;
+    bool isBloodGroupInvalid = bloodGroupErrorText != null;
+    bool isBloodGroupValid = !isBloodGroupInvalid && _bloodGroupTouched && _bloodGroup != null;
+    Color getBloodGroupBorderColor() { if (isBloodGroupValid) return Colors.green; if (isBloodGroupInvalid) return Colors.red; return Colors.grey.shade400; }
+    final Color finalBloodGroupBorderColor = getBloodGroupBorderColor();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -544,9 +580,23 @@ class _RegistrationFormState extends State<RegistrationForm> {
         _buildDropdownField(),
         const SizedBox(height: 15),
         DropdownButtonFormField<String>(
-          value: _bloodGroup, hint: Text(_t('bloodGroup')), decoration: InputDecoration(filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)),
+          value: _bloodGroup, 
+          hint: Text(_t('bloodGroup')), 
+          decoration: InputDecoration(
+            filled: true, 
+            fillColor: Colors.white, 
+            errorText: bloodGroupErrorText,
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: finalBloodGroupBorderColor, width: 1.2)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: finalBloodGroupBorderColor, width: 2.0)),
+            errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.red, width: 1.2)),
+            focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.red, width: 2.0)),
+          ),
           items: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((val) => DropdownMenuItem<String>(value: val, child: Text(val))).toList(),
-          onChanged: (val) => setState(() => _bloodGroup = val), validator: (value) => value == null ? _t('selectBloodGroup') : null,
+          onChanged: (val) => setState(() {
+            _bloodGroupTouched = true;
+            _bloodGroup = val;
+          }), 
+          validator: (value) => value == null ? _t('selectBloodGroup') : null,
         ),
         const SizedBox(height: 20),
         Row(
@@ -578,7 +628,7 @@ class _RegistrationFormState extends State<RegistrationForm> {
                   Text(_t('uploadID'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), const SizedBox(height: 8),
                   ElevatedButton.icon(
                     onPressed: _pickIdDocument, 
-                    icon: const Icon(Icons.attach_file), 
+                    icon: const Icon(Icons.attach_file,color: Colors.grey), 
                     label: Text(_idDocumentBytes == null ? _t('uploadIdBtn') : _t('changeID')),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.grey.shade200,
@@ -600,7 +650,6 @@ class _RegistrationFormState extends State<RegistrationForm> {
       ],
     );
   }
-  
   Widget _buildBoxedTextField({ required TextEditingController controller, required FocusNode focusNode, required String hint, required bool touched, String? Function(String?)? validator, TextInputType? keyboardType, List<TextInputFormatter>? inputFormatters,}) {
     String? errorText = touched ? validator?.call(controller.text) : null;
     bool isInvalid = errorText != null;

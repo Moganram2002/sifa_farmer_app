@@ -173,7 +173,7 @@ class _SuperAdminDashboardViewState extends State<_SuperAdminDashboardView> {
     }
   }
 
-  void _bulkDeactivateUsers() async {
+   void _bulkDeactivateUsers() async {
     if (_selectedUserIds.isEmpty) return;
     bool? confirm = await showDialog(
       context: context,
@@ -182,11 +182,16 @@ class _SuperAdminDashboardViewState extends State<_SuperAdminDashboardView> {
         content: Text(
             'Are you sure you want to deactivate ${_selectedUserIds.length} selected user(s)?'),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false), 
+            child: const Text('Cancel'),
+            style: TextButton.styleFrom(foregroundColor: Colors.grey.shade700),
+          ),
           ElevatedButton(
               onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Deactivate'),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700)),
+              child: const Text('Deactivate', style: const TextStyle( color: Color.fromARGB(255, 241, 244, 241))),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.grey.shade700)),
+              
         ],
       ),
     );
@@ -379,7 +384,7 @@ class _SuperAdminDashboardViewState extends State<_SuperAdminDashboardView> {
                 const SizedBox(height: 16),
                 ListTile(
                   leading: Icon(Icons.settings_outlined, size: 20, color: iconColor),
-                  title: const Text("Settings"),
+                  title: const Text("Settings", style: TextStyle(color: Color.fromARGB(255, 105, 102, 102))),
                   selected: _currentViewIndex == 3,
                   selectedTileColor: kLightGreen,
                   onTap: () => _switchView(3),
@@ -699,7 +704,7 @@ class _SuperAdminDashboardViewState extends State<_SuperAdminDashboardView> {
     if (isInactiveTable) {
       return TextButton(
         onPressed: () => _reactivateUser(user.id),
-        child: const Text('Reactivate', style: TextStyle(color: Colors.blue)),
+        child: const Text('Reactivate', style: TextStyle(color: Color.fromARGB(255, 32, 152, 5))),
       );
     }
     if (isPending) {
@@ -740,7 +745,7 @@ class _SuperAdminDashboardViewState extends State<_SuperAdminDashboardView> {
       switch (status) {
         case 0:
           label = 'Pending';
-          color = Colors.orange.shade700;
+          color = const Color.fromARGB(255, 115, 114, 111);
           break;
         case 1:
           label = 'Active';
@@ -1405,7 +1410,7 @@ class _UserDashboardViewState extends State<_UserDashboardView> with SingleTicke
                 "Your account is pending approval",
                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
-              backgroundColor: Colors.orange.shade700,
+              backgroundColor: const Color.fromARGB(255, 104, 103, 103),
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
             ),
             const SizedBox(height: 20),
